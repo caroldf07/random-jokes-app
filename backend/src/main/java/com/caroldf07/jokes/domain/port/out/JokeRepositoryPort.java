@@ -7,6 +7,8 @@ import java.util.Optional;
 
 public interface JokeRepositoryPort {
 
+    Joke save(Joke joke);
+
     List<Joke> findAll();
 
     Optional<Joke> findById(Long id);

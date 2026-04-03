@@ -5,19 +5,29 @@ import java.util.Objects;
 public class Joke {
 
     private final Long id;
+    private final Integer externalId;
     private final String setup;
     private final String punchline;
     private final String category;
 
-    public Joke(Long id, String setup, String punchline, String category) {
+    public Joke(Long id, Integer externalId, String setup, String punchline, String category) {
         this.id = id;
+        this.externalId = externalId;
         this.setup = setup;
         this.punchline = punchline;
         this.category = category;
     }
 
+    public Joke(Long id, String setup, String punchline, String category) {
+        this(id, null, setup, punchline, category);
+    }
+
     public Long getId() {
         return id;
+    }
+
+    public Integer getExternalId() {
+        return externalId;
     }
 
     public String getSetup() {
@@ -47,6 +57,6 @@ public class Joke {
 
     @Override
     public String toString() {
-        return "Joke{id=" + id + ", setup='" + setup + "', punchline='" + punchline + "', category='" + category + "'}";
+        return "Joke{id=" + id + ", externalId=" + externalId + ", setup='" + setup + "', category='" + category + "'}";
     }
 }

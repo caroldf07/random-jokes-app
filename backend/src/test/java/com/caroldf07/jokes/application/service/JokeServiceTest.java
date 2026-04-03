@@ -1,6 +1,7 @@
 package com.caroldf07.jokes.application.service;
 
 import com.caroldf07.jokes.domain.model.Joke;
+import com.caroldf07.jokes.domain.port.out.ExternalJokeApiPort;
 import com.caroldf07.jokes.domain.port.out.JokeRepositoryPort;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -15,10 +16,14 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class JokeServiceTest {
+
+    @Mock
+    private ExternalJokeApiPort externalJokeApiPort;
 
     @Mock
     private JokeRepositoryPort jokeRepository;
@@ -30,46 +35,43 @@ class JokeServiceTest {
 
     @BeforeEach
     void setUp() {
-        jokeService = new JokeService(jokeRepository);
-        joke1 = new Joke(1L, "Por que o livro estava triste?", "Tinha muitos problemas!", "Português");
-        joke2 = new Joke(2L, "O que o zero disse ao oito?", "Que cinto bonito!", "Português");
+        jokeService = new JokeService(externalJokeApiPort, jokeRepository);
+        joke1 = new Joke(1L, 10, "Por que o livro estava triste?", "Tinha muitos problemas!", "Português");
+        joke2 = new Joke(2L, 11, "O que o zero disse ao oito?", "Que cinto bonito!", "Português");
     }
 
-    @Test
-    @DisplayName("Should return a random joke when jokes are available")
-    void shouldReturnRandomJokeWhenJokesAreAvailable() {
-        when(jokeRepository.findAll()).thenReturn(Arrays.asList(joke1, joke2));
-
-        Joke result = jokeService.getRandomJoke();
-
-        assertThat(result).isIn(joke1, joke2);
-    }
+    // --- getRandomJoke ---
 
     @Test
-    @DisplayName("Should throw exception when no jokes available")
-    void shouldThrowExceptionWhenNoJokesAvailable() {
-        when(jokeRepository.findAll()).thenReturn(Collections.emptyList());
-
-        assertThatThrownBy(() -> jokeService.getRandomJoke())
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessage("No jokes available");
-    }
-
-    @Test
-    @DisplayName("Should return single joke when only one exists")
-    void shouldReturnSingleJokeWhenOnlyOneExists() {
-        when(jokeRepository.findAll()).thenReturn(Collections.singletonList(joke1));
+    @DisplayName("Should return joke from external API")
+    void shouldReturnJokeFromExternalApi() {
+        when(externalJokeApiPort.fetchRandomJoke()).thenReturn(joke1);
 
         Joke result = jokeService.getRandomJoke();
 
         assertThat(result).isEqualTo(joke1);
+        verify(externalJokeApiPort).fetchRandomJoke();
+        verifyNoInteractions(jokeRepository);
     }
 
     @Test
-    @DisplayName("Should return all jokes")
-    void shouldReturnAllJokes() {
-        List<Joke> expectedJokes = Arrays.asList(joke1, joke2);
-        when(jokeRepository.findAll()).thenReturn(expectedJokes);
+    @DisplayName("Should propagate exception when external API fails")
+    void shouldPropagateExceptionWhenExternalApiFails() {
+        when(externalJokeApiPort.fetchRandomJoke())
+                .thenThrow(new RuntimeException("API unavailable"));
+
+        assertThatThrownBy(() -> jokeService.getRandomJoke())
+                .isInstanceOf(RuntimeException.class)
+                .hasMessage("API unavailable");
+    }
+
+    // --- getAllJokes ---
+
+    @Test
+    @DisplayName("Should return all saved jokes from repository")
+    void shouldReturnAllSavedJokes() {
+        List<Joke> expected = Arrays.asList(joke1, joke2);
+        when(jokeRepository.findAll()).thenReturn(expected);
 
         List<Joke> result = jokeService.getAllJokes();
 
@@ -78,12 +80,39 @@ class JokeServiceTest {
     }
 
     @Test
-    @DisplayName("Should return empty list when no jokes exist")
-    void shouldReturnEmptyListWhenNoJokesExist() {
+    @DisplayName("Should return empty list when no jokes saved")
+    void shouldReturnEmptyListWhenNoJokesSaved() {
         when(jokeRepository.findAll()).thenReturn(Collections.emptyList());
 
         List<Joke> result = jokeService.getAllJokes();
 
         assertThat(result).isEmpty();
+    }
+
+    // --- saveJoke ---
+
+    @Test
+    @DisplayName("Should save joke via repository and return saved instance")
+    void shouldSaveJokeViaRepository() {
+        Joke unsaved = new Joke(null, 42, "Setup?", "Punchline!", "Categoria");
+        Joke saved = new Joke(1L, 42, "Setup?", "Punchline!", "Categoria");
+        when(jokeRepository.save(unsaved)).thenReturn(saved);
+
+        Joke result = jokeService.saveJoke(unsaved);
+
+        assertThat(result.getId()).isEqualTo(1L);
+        verify(jokeRepository).save(unsaved);
+    }
+
+    @Test
+    @DisplayName("Should delegate save to repository only once")
+    void shouldDelegateSaveToRepositoryOnce() {
+        Joke joke = new Joke(null, "Setup", "Punchline", "Cat");
+        when(jokeRepository.save(any())).thenReturn(new Joke(99L, "Setup", "Punchline", "Cat"));
+
+        jokeService.saveJoke(joke);
+
+        verify(jokeRepository, times(1)).save(joke);
+        verifyNoInteractions(externalJokeApiPort);
     }
 }

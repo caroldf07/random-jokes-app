@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import App from '../App'
@@ -23,70 +23,85 @@ describe('App', () => {
   })
 
   it('renders the app title', () => {
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => mockJoke,
-    })
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => mockJoke })
     render(<App />)
     expect(screen.getByText('Piadas Aleatórias')).toBeInTheDocument()
   })
 
-  it('renders the subtitle', () => {
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => mockJoke,
-    })
-    render(<App />)
-    expect(screen.getByText('Clique no botão para ouvir uma piada!')).toBeInTheDocument()
-  })
-
   it('loads and displays a random joke on mount', async () => {
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => mockJoke,
-    })
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => mockJoke })
     render(<App />)
     await waitFor(() => {
       expect(screen.getByText('Por que o livro estava triste?')).toBeInTheDocument()
-    })
-  })
-
-  it('fetches a new joke when button is clicked', async () => {
-    global.fetch = vi.fn()
-      .mockResolvedValueOnce({ ok: true, json: async () => mockJoke })
-      .mockResolvedValueOnce({ ok: true, json: async () => mockJoke2 })
-
-    render(<App />)
-    await waitFor(() => {
-      expect(screen.getByText('Por que o livro estava triste?')).toBeInTheDocument()
-    })
-
-    const button = screen.getByText('Nova Piada!')
-    await userEvent.click(button)
-
-    await waitFor(() => {
-      expect(screen.getByText('O que o zero disse ao oito?')).toBeInTheDocument()
     })
   })
 
   it('shows error message when fetch fails', async () => {
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: false,
-    })
+    global.fetch = vi.fn().mockResolvedValue({ ok: false })
     render(<App />)
     await waitFor(() => {
       expect(screen.getByText(/Erro:/)).toBeInTheDocument()
     })
   })
 
-  it('renders the new joke button', async () => {
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => mockJoke,
-    })
+  it('fetches new joke when Pular button is clicked', async () => {
+    global.fetch = vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => mockJoke })
+      .mockResolvedValueOnce({ ok: true, json: async () => mockJoke2 })
+
     render(<App />)
+    await waitFor(() => screen.getByText('Por que o livro estava triste?'))
+
+    await userEvent.click(screen.getByText('Pular piada'))
     await waitFor(() => {
-      expect(screen.getByText('Nova Piada!')).toBeInTheDocument()
+      expect(screen.getByText('O que o zero disse ao oito?')).toBeInTheDocument()
     })
+  })
+
+  it('saves joke via POST when Boa button is clicked', async () => {
+    global.fetch = vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => mockJoke })
+      .mockResolvedValueOnce({ ok: true })
+      .mockResolvedValueOnce({ ok: true, json: async () => mockJoke2 })
+
+    render(<App />)
+    await waitFor(() => screen.getByText('Boa! 👍'))
+
+    await userEvent.click(screen.getByText('Boa! 👍'))
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      'http://localhost:8080/api/jokes',
+      expect.objectContaining({ method: 'POST' })
+    )
+  })
+
+  it('does not save joke when Ruim button is clicked', async () => {
+    global.fetch = vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => mockJoke })
+      .mockResolvedValueOnce({ ok: true, json: async () => mockJoke2 })
+
+    render(<App />)
+    await waitFor(() => screen.getByText('Ruim! 👎'))
+
+    await userEvent.click(screen.getByText('Ruim! 👎'))
+
+    const postCalls = global.fetch.mock.calls.filter(
+      ([, opts]) => opts?.method === 'POST'
+    )
+    expect(postCalls).toHaveLength(0)
+  })
+
+  it('shows rated feedback after clicking Boa', async () => {
+    global.fetch = vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => mockJoke })
+      .mockResolvedValueOnce({ ok: true })
+      .mockResolvedValueOnce({ ok: true, json: async () => mockJoke2 })
+
+    render(<App />)
+    await waitFor(() => screen.getByText('Boa! 👍'))
+
+    await userEvent.click(screen.getByText('Boa! 👍'))
+
+    expect(screen.getByText('Piada salva! Buscando outra...')).toBeInTheDocument()
   })
 })
