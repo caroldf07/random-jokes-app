@@ -15,3 +15,5 @@ frontend/.env.local
 *.iml
 .vscode/
 .DS_Store
+
+.vercel/
