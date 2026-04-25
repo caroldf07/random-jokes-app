@@ -1,9 +1,18 @@
 version: 2.1
 
 jobs:
+  security-audit:
+    docker:
+      - image: cimg/node:20.18
+    steps:
+      - checkout
+      - run:
+          name: Frontend security audit
+          command: cd frontend && npm ci && npm audit --audit-level=high
+
   backend-build-test:
     docker:
-      - image: cimg/openjdk:11.0
+      - image: cimg/openjdk:17.0
     steps:
       - checkout
       - restore_cache:
@@ -11,7 +20,7 @@ jobs:
             - v1-backend-{{ checksum "backend/pom.xml" }}
       - run:
           name: Build and test backend
-          command: cd backend && mvn clean verify
+          command: cd backend && ./mvnw clean verify -B
       - save_cache:
           paths:
             - ~/.m2
@@ -21,7 +30,7 @@ jobs:
 
   frontend-build-test:
     docker:
-      - image: cimg/node:18.17
+      - image: cimg/node:20.18
     steps:
       - checkout
       - restore_cache:
@@ -41,39 +50,29 @@ jobs:
           name: Build
           command: cd frontend && npm run build
 
-  docker-build-push:
+  deploy-vercel:
     docker:
-      - image: cimg/base:stable
+      - image: cimg/node:20.18
     steps:
       - checkout
-      - setup_remote_docker:
-          version: 20.10.24
       - run:
-          name: Build and push backend image
+          name: Deploy frontend to Vercel
           command: |
-            echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
-            docker build -t $DOCKER_USERNAME/random-jokes-backend:$CIRCLE_SHA1 ./backend
-            docker tag $DOCKER_USERNAME/random-jokes-backend:$CIRCLE_SHA1 $DOCKER_USERNAME/random-jokes-backend:latest
-            docker push $DOCKER_USERNAME/random-jokes-backend:$CIRCLE_SHA1
-            docker push $DOCKER_USERNAME/random-jokes-backend:latest
-      - run:
-          name: Build and push frontend image
-          command: |
-            docker build \
-              --build-arg VITE_API_BASE_URL=$VITE_API_BASE_URL \
-              -t $DOCKER_USERNAME/random-jokes-frontend:$CIRCLE_SHA1 ./frontend
-            docker tag $DOCKER_USERNAME/random-jokes-frontend:$CIRCLE_SHA1 $DOCKER_USERNAME/random-jokes-frontend:latest
-            docker push $DOCKER_USERNAME/random-jokes-frontend:$CIRCLE_SHA1
-            docker push $DOCKER_USERNAME/random-jokes-frontend:latest
+            cd frontend
+            npm install -g vercel@latest
+            vercel pull --yes --environment=production --token=$VERCEL_TOKEN
+            vercel build --prod --token=$VERCEL_TOKEN
+            vercel deploy --prebuilt --prod --token=$VERCEL_TOKEN
 
 workflows:
-  build-test-deploy:
+  ci-cd:
     jobs:
+      - security-audit
       - backend-build-test
       - frontend-build-test
-      - docker-build-push:
+      - deploy-vercel:
           requires:
-            - backend-build-test
+            - security-audit
             - frontend-build-test
           filters:
             branches:

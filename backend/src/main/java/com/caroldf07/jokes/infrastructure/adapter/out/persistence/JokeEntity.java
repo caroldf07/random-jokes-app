@@ -1,6 +1,6 @@
 package com.caroldf07.jokes.infrastructure.adapter.out.persistence;
 
-import javax.persistence.*;
+import jakarta.persistence.*;
 
 @Entity
 @Table(name = "jokes")
