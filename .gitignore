@@ -1,8 +1,9 @@
 # Backend
 backend/target/
-backend/.mvn/wrapper/maven-wrapper.jar
 *.class
 *.jar
+!.mvn/wrapper/maven-wrapper.jar
+!backend/.mvn/wrapper/maven-wrapper.jar
 *.war
 
 # Frontend
